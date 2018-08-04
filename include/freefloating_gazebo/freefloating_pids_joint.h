@@ -10,9 +10,7 @@ class FreeFloatingJointPids : public FreeFloatingPids
 {
 
 public:
-    void Init(const ros::NodeHandle&_node,
-              ros::Duration&_dt,
-              std::string default_mode = "position");
+    void Init(const ros::NodeHandle&_node, ros::Duration&_dt);
     unsigned int JointNb() {return joint_lower_.size();}
 
     // parse received body setpoint
@@ -31,6 +29,7 @@ private:
     std::vector<double> position_error_, velocity_error_, position_filtered_measure_, velocity_filtered_measure_;
     sensor_msgs::JointState joint_setpoint_, joint_measure_, joint_command_;
     bool vmax_is_set_;
+    bool cascaded_position_pid_;
     double alpha_;
 
 };

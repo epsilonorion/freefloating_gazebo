@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(freefloating_gazebo)
-add_compile_options(-std=c++11)
+set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  gazebo_ros
   std_msgs
   std_srvs
   gazebo_msgs
@@ -13,10 +14,10 @@ find_package(catkin REQUIRED COMPONENTS
   control_toolbox
   rostime
   nav_msgs
-  message_generation
+  usv_water_current
 )
 
-find_package(gazebo)
+find_package(gazebo REQUIRED)
 find_package(Eigen3)
 if(NOT EIGEN3_FOUND)
   # Fallback to cmake_modules
@@ -27,17 +28,6 @@ else()
   set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
 endif()
 
-
-add_service_files(
-  FILES
-  ControlType.srv
-)
-
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-)
-
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES ${PROJECT_NAME} 
@@ -45,73 +35,51 @@ catkin_package(
     roscpp
     std_msgs
     std_srvs
+    gazebo_ros
     gazebo_msgs
     geometry_msgs
     sensor_msgs
     control_toolbox
     rostime
     nav_msgs
-    message_runtime
 )
 
-include_directories(include ${Boost_INCLUDE_DIR}
-                    ${catkin_INCLUDE_DIRS}
-                    ${EIGEN3_INCLUDE_DIRS})
-
-
-if(gazebo_FOUND)
-
 link_directories(${GAZEBO_LIBRARY_DIRS})
-include_directories(${GAZEBO_INCLUDE_DIRS})
+include_directories(include ${Boost_INCLUDE_DIR} ${catkin_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIRS} )
 
 # world plugin to simulate buoyancy and viscous force
+
 add_library(freefloating_gazebo_fluid src/freefloating_gazebo_fluid.cpp include/freefloating_gazebo/freefloating_gazebo_fluid.h)
 target_link_libraries(freefloating_gazebo_fluid ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
+add_dependencies(freefloating_gazebo_fluid ${catkin_EXPORTED_TARGETS})
 
 # model plugin subscribes to body and joint efforts and applies them in Gazebo
-add_library(freefloating_gazebo_control src/freefloating_gazebo_control.cpp
-                                        include/freefloating_gazebo/freefloating_gazebo_control.h
-                                        include/freefloating_gazebo/thruster_mapper.h
-                                        src/thruster_mapper.cpp)
+add_library(freefloating_gazebo_control src/freefloating_gazebo_control.cpp include/freefloating_gazebo/freefloating_gazebo_control.h)
 target_link_libraries(freefloating_gazebo_control ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
-
-install(TARGETS freefloating_gazebo_fluid
-                freefloating_gazebo_control
-        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-endif()
-
 
 # node to perform PID control for body (thrusters) and joints
 add_executable(pid_control src/freefloating_pids_main.cpp
-    include/freefloating_gazebo/butterworth.h
-    include/freefloating_gazebo/thruster_mapper.h
-    src/freefloating_pids.cpp include/freefloating_gazebo/freefloating_pids.h
-    src/freefloating_pids_body.cpp include/freefloating_gazebo/freefloating_pids_body.h
-    src/freefloating_pids_joint.cpp include/freefloating_gazebo/freefloating_pids_joint.h
-    include/freefloating_gazebo/thruster_mapper.h src/thruster_mapper.cpp)
-target_link_libraries(pid_control ${catkin_LIBRARIES})
-add_dependencies(pid_control ${${PROJECT_NAME}_EXPORTED_TARGETS})
-add_dependencies(pid_control freefloating_gazebo_gencpp)
+src/freefloating_pids.cpp include/freefloating_gazebo/freefloating_pids.h
+src/freefloating_pids_body.cpp include/freefloating_gazebo/freefloating_pids_body.h
+src/freefloating_pids_joint.cpp include/freefloating_gazebo/freefloating_pids_joint.h)
+target_link_libraries(pid_control ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES})
 
-# test Butterworth filter
-add_executable(butter test/testButter.cpp)
-target_link_libraries(butter ${catkin_LIBRARIES})
-add_executable(sdf_parse test/sdf_parse.cpp
-                include/freefloating_gazebo/thruster_mapper.h
-                src/thruster_mapper.cpp)
-target_link_libraries(sdf_parse ${catkin_LIBRARIES} ${catkin_LIBRARIES})
 
-install(TARGETS pid_control
-        ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-        RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(
+  TARGETS
+    pid_control
+    freefloating_gazebo_control
+    freefloating_gazebo_fluid
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
-install(DIRECTORY include/${PROJECT_NAME}/
-        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION})
+install(DIRECTORY scripts/
+   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/scripts
+   FILES_MATCHING PATTERN "*" 
+   PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+               GROUP_READ GROUP_EXECUTE
+               WORLD_READ WORLD_EXECUTE
+)
 
-install(DIRECTORY scripts
-                  world
-                  srv
-            DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

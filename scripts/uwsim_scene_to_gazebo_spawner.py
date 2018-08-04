@@ -8,6 +8,9 @@ from lxml import etree
 import xacro
 import resource_retriever
 import subprocess
+import rospkg
+import re
+from pathlib import Path
 
 def uwsim_to_abspath(filename, datapath):
     '''
@@ -22,9 +25,34 @@ def abspath_to_uwsim(filename, datapath):
     '''
     Returns relative file path
     '''
+    expression = re.compile("package://")
+    if (expression.match(filename) is None):
+	print "fail: ", filename
+    else:
+	print "found: ", filename
+
+	lista = re.findall("package://[^/]*/", filename)
+	print "lista: ", lista, " len: ",len(lista)
+	if (len(lista) > 0):
+		nomeCompleto = lista[0]
+		packageName = nomeCompleto[10:len(nomeCompleto)-1]
+		print "packageName: ",packageName
+		rospack = rospkg.RosPack()
+		print "path: ",rospack.get_path(packageName)
+		print "file: ",filename[len(lista[0]):]
+		return filename[len(lista[0]):], rospack.get_path(packageName)
+   # if ("package://" in filename):
+#	rospack = rospkg.RosPack()
+#	rospack.list_pkgs() 
+#	print "Estimated: ", filename[10:]
+#	return rospack.get_path(filename[10:]), 
+
     for p in datapath:
         if p in filename:
-            return filename[len(p)+1:], p
+	    if ("file://" in filename) and not ("file://" in p):
+		return filename[len(p)+1+len("file://"):], p
+	    else:
+            	return filename[len(p)+1:], p
     return filename, ''
     
 def abspath_to_roslaunch(filename):
@@ -74,6 +102,7 @@ def parse_launch_file(launch_file):
     # now we have the uwsim node, let's substitute and parse its args
     # we cannot substitute $(arg XXX) outside the launchfile, so we just remove it
     uwsim_args = substitution_args.resolve_args(uwsim_node[0].get('args').replace('$(arg', '')).split(' ')
+    print "uwsim_args: ",uwsim_args
     
     # look for configfile and additional datapath in uwsim args
     configfile = ''
@@ -112,6 +141,7 @@ def extract_xml_value(node, tree):
         parent = child[0].cloneNode
         
 def insert_header_and_write(xml_data, from_file, filename):
+    print "calling insert_header_and_write for file "+filename
     '''
     Insert warning at the beginning of the xml structure and write to filename
     '''
@@ -177,17 +207,20 @@ def process_vehicles(vehicles, datapath):
     for vehicle in vehicles:
         name = vehicle.findtext('name')
         uwsim_urdf_file = vehicle.findtext('file')
+	print "---> vehicle: " + name + " file: " + uwsim_urdf_file
         # get to Gazebo xacro/urdf file
-        gazebo_model_file, datadir = uwsim_to_abspath(uwsim_urdf_file.replace('_uwsim.urdf','.xacro'), datapath)
+        gazebo_model_file, datadir = uwsim_to_abspath(uwsim_urdf_file.replace('_uwsim.urdf','.xacro').replace("urdf/","xacro/"), datapath)
         if datadir == '':
             gazebo_model_file, datadir = uwsim_to_abspath(uwsim_urdf_file.replace('_uwsim',''), datapath)            
         if datadir == '':
             rospy.loginfo('Could not find original file for ' + uwsim_urdf_file + ' in ' + scene_file)
             sys.exit(1)
-        uwsim_urdf_file = gazebo_model_file.replace('.urdf', '_uwsim.urdf').replace('.xacro', '_uwsim.urdf')
+        uwsim_urdf_file = gazebo_model_file.replace('.urdf', '_uwsim.urdf').replace('.xacro', '_uwsim.urdf').replace("xacro/", "urdf/")
             
+        print "gazebo_model_file: "+gazebo_model_file
         # parse Gazebo file (urdf or xacro)
         if 'xacro' in gazebo_model_file:
+	    print "running xacro"
             uwsim_urdf_xml = subprocess.Popen(['rosrun', 'xacro', 'xacro', '--inorder', gazebo_model_file], stdout=subprocess.PIPE)
             uwsim_urdf_xml = etree.fromstring(uwsim_urdf_xml.stdout.read())
          #   uwsim_urdf_xml = xacro.parse(gazebo_model_file)
@@ -195,6 +228,7 @@ def process_vehicles(vehicles, datapath):
          #   uwsim_urdf_xml = etree.fromstring(uwsim_urdf_xml.toxml())
         else:
             uwsim_urdf_xml = etree.parse(gazebo_model_file).getroot()
+	    print "parsing model file"
 
         # clean up URDF: keep only joints and links
         for child in uwsim_urdf_xml.getchildren():
@@ -211,12 +245,26 @@ def process_vehicles(vehicles, datapath):
         if len(meshes) != 0:
             # create uwsim urdf only if mesh in gazebo urdf, otherwise trust the user 
             for mesh in meshes:
-                mesh_file = resource_retriever.get_filename(substitution_args.resolve_args(mesh.get('filename')))[7:]
+		print "------ mesh: "+ mesh.get('filename')
+		print "------ " + substitution_args.resolve_args(mesh.get('filename'))
+                #mesh_file = resource_retriever.get(substitution_args.resolve_args(mesh.get('filename'))).url[7:]
+		mesh_file = substitution_args.resolve_args(mesh.get('filename'))
+		#print mesh_file
+		print "datapath: ",datapath;
+
+		#mesh_file = substitution_args.resolve_args(mesh.get('filename'))
                 # get uwsim relative path for mesh
                 mesh_file, datadir = abspath_to_uwsim(mesh_file, datapath)
+                #mesh_file, datadir = uwsim_to_abspath(mesh_file, datapath)
+		print "======= novooo: "
+		print mesh_file
                 # if mesh in dae, try to find corresponding osg
                 if '.dae' in mesh_file:
-                    mesh_osg, datadir_osg = uwsim_to_abspath(mesh_file.replace('.dae','.osg'), datapath)
+                    mesh_osg, datadir_osg = uwsim_to_abspath(mesh_file.replace('.dae','.obj'), datapath)
+                    if datadir_osg != '':
+                        mesh_file, datadir = abspath_to_uwsim(mesh_osg, datapath)
+                if '.stl' in mesh_file:
+                    mesh_osg, datadir_osg = uwsim_to_abspath(mesh_file.replace('.stl','.obj'), datapath)
                     if datadir_osg != '':
                         mesh_file, datadir = abspath_to_uwsim(mesh_osg, datapath)
                 if datadir == '':
@@ -233,7 +281,7 @@ def process_vehicles(vehicles, datapath):
               
     return vehicle_nodes
     
-def process_objects(objects, datapath):
+def process_objects(objcts, datapath):
     '''
     Looks for the objects' mesh files in uwsim datapath
     Creates corresponding urdf for Gazebo
@@ -242,7 +290,7 @@ def process_objects(objects, datapath):
     
     gazebo_mesh_ext = ['.stl', '.dae']
     object_nodes = []
-    for obj in objects:
+    for obj in scene_xml.findall('object'):
         name = obj.findtext('name')
         uwsim_mesh_file = obj.findtext('file')
         
@@ -284,11 +332,18 @@ def process_objects(objects, datapath):
     
 if __name__ == '__main__':
     
-    #rospy.init_node('scene_to_spawner')
+    rospy.init_node('scene_to_spawner')
     
     # parse launch file to get uwsim info
     launch_file = sys.argv[1]
+    print "Parsing launch file: ", launch_file
+    for i in range(0, len(sys.argv)):
+	print "Argument[",i,"]: ",sys.argv[i]
     datapath, scene_file = parse_launch_file(launch_file)
+    print "----------------- Scene file"
+    print "----------------- Scene file ", scene_file;
+    print "----------------- datapath ", datapath;
+
     
     # parse scene file 
     scene_xml = etree.parse(scene_file)

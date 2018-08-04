@@ -12,27 +12,53 @@
 #include <std_msgs/Float32MultiArray.h>
 #include <std_srvs/Empty.h>
 #include <eigen3/Eigen/Core>
-#include <freefloating_gazebo/thruster_mapper.h>
+#include <eigen3/Eigen/SVD>
 
 namespace gazebo
 {
 
-class FreeFloatingControlPlugin : public ModelPlugin
+
+class LinkSurface
+{
+public:
+	std::string linkName;
+	math::Vector3 waterSurface;
+	ros::Subscriber water_subscriber;
+
+	void processSurfaceData(const geometry_msgs::Point::ConstPtr& pt)
+	{
+		waterSurface.x = pt->x;
+		waterSurface.y = pt->y;
+		waterSurface.z = pt->z;
+
+		//std::cerr<<"\n "<<name<<" m estah com z: "<<waterSurface.z;
+	}
+
+	void createSubscriber(ros::NodeHandle nh, std::string topic)
+	{
+		water_subscriber = nh.subscribe(topic, 1, &LinkSurface::processSurfaceData, this);
+	}
+
+};
+
+class FreeFloatingControlPlugin : public gazebo::ModelPlugin
 {
 
 public:
     FreeFloatingControlPlugin() {}
     ~FreeFloatingControlPlugin()
     {
+        event::Events::DisconnectWorldUpdateBegin(this->update_event_);
         rosnode_.shutdown();
         //    delete rosnode_;
     }
 
-    void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
-    void Update();
+    virtual void Load(physics::ModelPtr _model, sdf::ElementPtr _sdf);
+    virtual void Update();
 
 private:
-
+    // parse a Vector3 string
+    void ReadVector3(const std::string &_string, math::Vector3 &_vector);
     // parse received joint command (joint states)
     void JointCommandCallBack(const sensor_msgs::JointStateConstPtr &_msg)
     {
@@ -49,6 +75,9 @@ private:
     // parse switch service
     bool SwitchService(std_srvs::EmptyRequest &req, std_srvs::EmptyResponse &res);
 
+    // no pseudo-inverse in Eigen ?
+    void ComputePseudoInverse(const Eigen::MatrixXd &_M, Eigen::MatrixXd &_pinv_M);
+
 private:
     // -- general data ----------------------------------------
     std::string robot_namespace_;
@@ -64,17 +93,24 @@ private:
     // -- body control ----------------------------------------
     // model body data
     physics::LinkPtr body_;
+    Eigen::MatrixXd thruster_map_;
+    Eigen::MatrixXd thruster_inverse_map_;
+    std::vector<double> thruster_max_command_;
+    std::vector<double> thruster_overWater_max_command_;
     bool control_body_, wrench_control_;
 
     // thruster control
-    ffg::ThrusterMapper mapper_;
+    std::vector<unsigned int> thruster_steer_idx_, thruster_fixed_idx_;
     std::vector<physics::LinkPtr> thruster_links_;
+    std::vector<std::string> thruster_names_;
     Eigen::VectorXd thruster_command_;
 
     // subscriber
     ros::Subscriber body_command_subscriber_;
     std::string body_command_topic_;
     bool body_command_received_;
+    std::vector<LinkSurface*> link_water_surface;
+
 
     // -- joint control ----------------------------------------
     // model joint data
@@ -97,6 +133,8 @@ private:
     // publisher to thruster percent use
     ros::Publisher thruster_use_publisher_;
     sensor_msgs::JointState thruster_use_;
+
+
 
 };
 GZ_REGISTER_MODEL_PLUGIN(FreeFloatingControlPlugin)

@@ -5,9 +5,7 @@ using std::endl;
 using std::string;
 
 
-void FreeFloatingJointPids::Init(const ros::NodeHandle&_node,
-                                 ros::Duration&_dt,
-                                 std::string default_mode)
+void FreeFloatingJointPids::Init(const ros::NodeHandle&_node, ros::Duration&_dt)
 {
     // init dt from rate
     dt_ = _dt;
@@ -19,17 +17,18 @@ void FreeFloatingJointPids::Init(const ros::NodeHandle&_node,
     alpha_ = .5;
 
     // get params from server
-    _node.getParam("config/joints/name", axes_);
+    std::vector<std::string> joint_names;
+    _node.getParam("config/joints/name", joint_names);
 
     // get whether or not we use a cascaded controller for position
-    _node.param("config/joints/cascaded_position", cascaded_position_, true);
+    _node.param("config/joints/cascaded_position", cascaded_position_pid_, true);
 
     // get whether or not we use dynamic reconfigure
     bool use_dynamic_reconfig;
     _node.param("config/joints/dynamic_reconfigure", use_dynamic_reconfig, false);
 
     // resize vectors
-    const unsigned int n = axes_.size();
+    const unsigned int n = joint_names.size();
     position_pids_.resize(n);
     velocity_pids_.resize(n);
     position_error_.resize(n);
@@ -41,15 +40,15 @@ void FreeFloatingJointPids::Init(const ros::NodeHandle&_node,
     joint_measure_.position.resize(n);
     joint_setpoint_.velocity.resize(n);
     joint_setpoint_.position.resize(n);
-    joint_setpoint_.name = axes_;
-    joint_command_.name = axes_;
+    joint_setpoint_.name = joint_names;
+    joint_command_.name = joint_names;
     joint_command_.effort.resize(n);
 
     // store limits
     _node.getParam("config/joints/upper", joint_upper_);
     _node.getParam("config/joints/lower", joint_lower_);
     _node.getParam("config/joints/velocity", joint_max_velocity_);
-    vmax_is_set_ = !cascaded_position_;
+    vmax_is_set_ = !cascaded_position_pid_;
 
     for(unsigned int i=0;i<n;++i)
     {
@@ -58,29 +57,19 @@ void FreeFloatingJointPids::Init(const ros::NodeHandle&_node,
         velocity_pids_[i].command_ptr = &(joint_command_.effort[i]);
 
         // position PID output depends on control type
-        if(cascaded_position_)
+        if(cascaded_position_pid_)
             position_pids_[i].command_ptr = &(joint_setpoint_.velocity[i]);
         else
             position_pids_[i].command_ptr = &(joint_command_.effort[i]);
 
         position_filtered_measure_[i] = velocity_filtered_measure_[i] = 0;
 
-        InitPID(position_pids_[i].pid, ros::NodeHandle(_node, axes_[i] + "/position"), use_dynamic_reconfig);
-        InitPID(velocity_pids_[i].pid, ros::NodeHandle(_node, axes_[i] + "/velocity"), use_dynamic_reconfig);
-
+        InitPID(position_pids_[i].pid, ros::NodeHandle(_node, joint_names[i] + "/position"), use_dynamic_reconfig);
+        InitPID(velocity_pids_[i].pid, ros::NodeHandle(_node, joint_names[i] + "/velocity"), use_dynamic_reconfig);
     }
-    initSwitchServices("joints");
 
-    // init to default control
-    CTreq req;
-    CTres res;
+    InitSwitchServices("joint");
 
-    if(default_mode == "velocity")
-        ToVelocityControl(req, res);
-    else if(default_mode == "effort")
-        ToEffortControl(req, res);
-    else
-        ToPositionControl(req, res);
 }
 
 
@@ -90,19 +79,20 @@ bool FreeFloatingJointPids::UpdatePID()
     if(!vmax_is_set_)
     {
         control_toolbox::Pid::Gains gains;
+        bool antiwindup;
 
         for(unsigned int i=0;i<velocity_error_.size();++i)
         {
                gains = position_pids_[i].pid.getGains();
+            //position_pids_[i].pid.getGains(dummy, dummy, dummy, joint_max_velocity_[i], dummy, antiwindup);
                joint_max_velocity_[i] = gains.i_max_;
+
         }
-        vmax_is_set_ = true;
     }
 
-    if(state_received_)
+    if(setpoint_received_ && state_received_)
     {
-        // do position PID computations only if needed
-        if(setpoint_position_ok_ && position_used_)
+        if(control_type_ == POSITION_CONTROL)
         {
             //  cout << "Joint position error: ";
             // get position error
@@ -118,7 +108,7 @@ bool FreeFloatingJointPids::UpdatePID()
             // has written new velocity setpoint
         }
 
-        if(setpoint_velocity_ok_ && velocity_used_)
+        if(control_type_ == VELOCITY_CONTROL || cascaded_position_pid_)
         {
             // get velocity error
             for(unsigned int i=0;i<velocity_error_.size();++i)
@@ -135,6 +125,11 @@ bool FreeFloatingJointPids::UpdatePID()
                 }
             }
 
+            /*   for(unsigned int i=0;i<velocity_error_.size();++i)
+            {
+                cout << "Joint " << i+1 << ": setpoint clamped = " << filters::clamp(joint_setpoint_.velocity[i], -joint_max_velocity_[i], joint_max_velocity_[i]) << ", measure = " << velocity_filtered_measure_[i] << ", error = " << velocity_error_[i] << ", command = " << joint_command_.effort[i] << endl;
+            }*/
+
             // update pid's
             UpdateVelocityPID();
         }
@@ -147,30 +142,26 @@ bool FreeFloatingJointPids::UpdatePID()
 
 void FreeFloatingJointPids::SetpointCallBack(const sensor_msgs::JointStateConstPtr &_msg)
 {
+    setpoint_received_ = true;
+
+    // don't assume joints are ordered the same!
+    //joint_setpoint_ = *_msg;
+
+
     // check for joint ordering
+    unsigned int i,j;
 
-
-    for(int i=0;i<joint_setpoint_.name.size();++i)
+    for(i=0;i<joint_setpoint_.name.size();++i)
     {
-        // get corresponding index in message
-        int idx = std::distance(_msg->name.begin(),
-                                std::find(_msg->name.begin(),
-                                          _msg->name.end(),
-                                          joint_setpoint_.name[i]));
-        if(idx < _msg->name.size())
+        for(j=0;j<_msg->name.size();++j)
         {
-            if(_msg->position.size() > idx)
+            if(joint_setpoint_.name[i] == _msg->name[j])
             {
-                joint_setpoint_.position[i] = _msg->position[idx];
-                setpoint_position_ok_ = true;
+                if(_msg->position.size() > j)
+                    joint_setpoint_.position[i] = _msg->position[j];
+                if(_msg->velocity.size() > j)
+                    joint_setpoint_.velocity[i] = _msg->velocity[j];
             }
-            if(_msg->velocity.size() > idx)
-            {
-                joint_setpoint_.velocity[i] = _msg->velocity[idx];
-                setpoint_velocity_ok_ = true;
-            }
-            if(_msg->effort.size() > idx)
-                joint_command_.effort[i] = _msg->effort[idx];
         }
     }
 }

@@ -1,166 +1,86 @@
 #!/usr/bin/env python
 
+import xacro, sys
+from subprocess import check_output
+from roslaunch import substitution_args
+import os
+from lxml import etree
 import yaml
-import pids
-import parsers
-from PyQt5 import QtWidgets
-import tunepid
-import sys
-
-try:
-    parsers = reload(parsers)
-    pids = reload(pids)
-    tunepid = reload(tunepid)
-except:
-    pass
-
-# load config
-if len(sys.argv) < 2:
-    print 'Input a .xacro or .urdf file'
-    print 'syntax : gen_pid.py <package> <urdf/xacro file>'
-    sys.exit(0)        
-pid, Umax, Fmax, mass, damping, config_file = parsers.parse(sys.argv[1], sys.argv[2])
-
-axes = ('x','y','z','roll','pitch','yaw')
-max_gains = {'p': 150., 'i': 50., 'd': 10.}
-
-
-class TunePID(QtWidgets.QMainWindow):
-
-    def __init__(self, parent=None):
-        QtWidgets.QMainWindow.__init__(self, parent)
-        self.ui = tunepid.Ui_TunePID()
-        self.ui.setupUi(self)
-        
-        self.psim = pids.Sim('p')
-        self.vsim = pids.Sim('v')
-        self.ui.p_sim.addWidget(self.psim.canvas)
-        self.ui.v_sim.addWidget(self.vsim.canvas)
-        
-        # build axes menu        
-        for i,ax in enumerate(axes):
-            if Fmax[i]:
-                self.ui.axes_list.addItem(ax)
-        self.ui.axes_list.currentTextChanged.connect(self.axis_change)
-        
-        self.ui.time_slider.valueChanged.connect(self.sims)
-        
-        # connect gains / setpoint sliders
-        for mode,fct in (('position', self.position_sim), ('velocity', self.velocity_sim)):
-            for g in ('p', 'i', 'd'):            
-                getattr(self.ui, mode[0]+'_K{}_slider'.format(g)).valueChanged.connect(fct)
-                getattr(self.ui, mode[0]+'_setpoint').valueChanged.connect(fct)
-            
-        # connect save gains button
-        getattr(self.ui, 'p_save').clicked.connect(lambda: self.save_gains('position'))
-        getattr(self.ui, 'v_save').clicked.connect(lambda: self.save_gains('velocity'))
-        # connect save to file
-        getattr(self.ui, 'p_tofile').clicked.connect(lambda: self.write('position'))
-        getattr(self.ui, 'v_tofile').clicked.connect(lambda: self.write('velocity'))
-
-        # global save
-        self.ui.tofile.clicked.connect(self.write_all)
-        
-        self.axis_change()
-                
-    def gains(self, mode):      
-        gains = {}
-        for g in ('p','i','d'):
-            label = mode + '_K' + g
-            gains[g] = getattr(self.ui, label+'_slider').value()*max_gains[g]/1000
-            getattr(self.ui, label).setText(str(gains[g]))
-        return gains
-       
-    def axis_change(self):
-        ax = str(self.ui.axes_list.currentText())
-        # load gains
-        for mode in ('position','velocity'):
-            for g in ('p','i','d'):
-                label = mode[0] + '_K' + g + '_slider'
-                getattr(self.ui, label).setValue(pid[ax][mode][g]*1000/max_gains[g])
-                
-    def sims(self):
-        self.position_sim()
-        self.velocity_sim()
-                    
-    def position_sim(self):
-        
-        # get simulated axis
-        ax = str(self.ui.axes_list.currentText())
-        # cascaded or not
-        
-        # setpoint
-        i = axes.index(ax)
-        sp = self.ui.p_setpoint.value()*10./1000
-        self.ui.p_sp.setText(str(sp))
-        
-        # final time
-        tmax = self.ui.time_slider.value()*20./1000
-        
-        self.psim.run(self.gains('p'), sp, mass[i], damping[i], Fmax[i], tmax)
-        
-        
-    def velocity_sim(self):
-        # get simulated axis
-        ax = str(self.ui.axes_list.currentText())
-        
-        # get max setpoint
-        i = axes.index(ax)
-        vmax = Fmax[i]/damping[i]
-        sp = self.ui.v_setpoint.value()*1.5*vmax/1000
-        self.ui.v_sp.setText(str(sp))
-        
-        tmax = self.ui.time_slider.value()*20./1000
-        
-        self.vsim.run(self.gains('v'), sp, mass[i], damping[i], Fmax[i], tmax)
-        
-    def save_gains(self, mode, ax = None):
-        global pid
-        if ax == None:
-            ax = str(self.ui.axes_list.currentText())
-        pid[ax][mode] = self.gains(mode[0]) 
-        print 'Writing gains for {}/{}'.format(ax, mode)
-                
-    def write(self, mode, ax = None):
-        
-        self.save_gains(mode, ax)
-            
-        # only save current axis
-        if ax == None:
-            ax = str(self.ui.axes_list.currentText())
-        
-        # reload current gains from config file
-        with open(config_file) as f:
-            pid_base = yaml.load(f)['controllers']
-        # replace with current
-        pid_base[ax][mode] = pid[ax][mode]
-        
-        # and save
-        with open(config_file, 'w') as f:
-            yaml.dump({'controllers': pid_base}, f, default_flow_style=False)
-            
-            
-    def write_all(self):        
-        # reload current gains from config file
-        with open(config_file) as f:
-            pid_base = yaml.load(f)['controllers']
-        
-        for ax in [self.ui.axes_list.itemText(i) for i in range(self.ui.axes_list.count())]:
-            for mode in ('position','velocity'):
-                self.save_gains(mode, ax)
-                # replace with current
-                pid_base[ax][mode] = pid[ax][mode]
-
-        # and save
-        with open(config_file, 'w') as f:
-            yaml.dump({'controllers': pid_base}, f, default_flow_style=False)
-                
+from numpy import array
 
 if __name__ == '__main__':
     
-    pids.pl.close('all')    
-    app = QtWidgets.QApplication(sys.argv)
-    window = TunePID()
-    window.show()
-    sys.exit(app.exec_())
+    p_default = 2
+    i_default = 0
+    d_default = 0
     
+    if len(sys.argv) < 2:
+        print 'Input a .xacro or .urdf file'
+        print 'syntax : gen_pid.py <package> <urdf file>'
+        sys.exit(0)
+        
+    robot_package = substitution_args.resolve_args('$(find %s)' % sys.argv[1])        
+    robot_file = sys.argv[2]
+    
+    # find file
+    robot_abs_file = ''
+    for urdf_dir in ['urdf', 'sdf']:
+        if os.path.lexists('%s/%s/%s' % (robot_package, urdf_dir, robot_file)):
+            robot_abs_file = '%s/%s/%s' % (robot_package, urdf_dir, robot_file)
+            
+    # create config directory
+    if not os.path.lexists('%s/config' % robot_package):
+        os.mkdir('%s/config' % robot_package)
+    config_file = '%s/config/%s_pid.yaml' % (robot_package, robot_file.split('.')[0])
+    
+    # load description
+    robot_description = etree.fromstring(check_output(['rosrun', 'xacro', 'xacro', robot_abs_file]))
+    
+    # init config dictionary
+    pid = {'config': {}}
+    
+    # parse joints
+    joints = [joint for joint in robot_description.findall('joint') if joint.get('type') != "fixed"]
+    if len(joints) != 0:
+        pid['config']['joints'] = {}
+        pid['config']['joints']['state'] = 'joint_states'
+        pid['config']['joints']['setpoint'] = 'joint_setpoint'
+        pid['config']['joints']['command'] = 'joint_command'
+        pid['config']['joints']['cascaded_position'] = False
+        pid['config']['joints']['dynamic_reconfigure'] = True    
+        for joint in joints:
+            name = joint.get('name')
+            pid[name] = {}
+            for controller in ['position', 'velocity']:
+                pid[name][controller] = {'p': p_default, 'i': i_default, 'd': d_default}
+                
+    # parse thrusters
+    thrusters = []
+    for gazebo in robot_description.findall('gazebo'):
+        for plugin in gazebo.findall('plugin'):
+            thrusters += plugin.findall('thruster')
+    if len(thrusters) != 0:
+        pid['config']['body'] = {}
+        pid['config']['body']['state'] = 'body_state'
+        pid['config']['body']['setpoint'] = 'body_setpoint'
+        pid['config']['body']['command'] = 'body_command'
+        pid['config']['body']['cascaded_position'] = False
+        pid['config']['body']['dynamic_reconfigure'] = True
+        body_axis_candidates = {0: 'x', 1: 'y', 2: 'z', 3: 'roll', 4: 'pitch', 5: 'yaw'}
+        body_axis = {}
+        for thruster in thrusters:
+            thruster_map = [float(v) for v in thruster.find('map').text.split(' ')]
+            for x in body_axis_candidates:
+                if thruster_map[x] != 0:
+                    body_axis[x] = body_axis_candidates[x]
+        for x in body_axis.values():
+            pid[x] = {}
+            for controller in ['position', 'velocity']:
+                pid[x][controller] = {'p': p_default, 'i': i_default, 'd': d_default}
+        
+    # write config
+    if len(joints) + len(thrusters) != 0:
+        with open(config_file, 'w') as f:
+            yaml.dump({'controllers': pid}, f)
+        print 'controller written in', config_file
+        
