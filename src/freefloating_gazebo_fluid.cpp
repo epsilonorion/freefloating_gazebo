@@ -514,6 +514,7 @@ namespace gazebo
 										rosnode_->getParam ("/uwsim/wind/x", x);
 										rosnode_->getParam ("/uwsim/wind/y", y);
 										new_buoy_link->wind.Set (x, y, 0);
+										std::cerr<<"\n\n wind: "<<x<<", "<<y;
 									}
 								}
 								else if (buoy_node->ValueStr () == "damping")
