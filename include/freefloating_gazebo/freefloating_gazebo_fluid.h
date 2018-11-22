@@ -31,6 +31,9 @@ namespace gazebo
 		{
 			std::cerr<<"\n Init link_st()"; waterSurface.Set(0,0,0);
 			usingLocalFluidVelocity = false;
+			usingNoneFluidVelocity = true;
+			usingLocalWindVelocity = false;
+			usingNoneWindVelocity = true;
 		};
         std::string model_name;
         physics::LinkPtr link;

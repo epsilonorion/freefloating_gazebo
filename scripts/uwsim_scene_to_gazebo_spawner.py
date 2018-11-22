@@ -89,7 +89,7 @@ def parse_launch_file(launch_file):
     if len(uwsim_node) == 0:
         rospy.loginfo('No uwsim node found')
         sys.exit(0)
-    elif len(uwsim_node) > 1:
+    elif len(uwsim_node) > 2:
         rospy.loginfo('Found several uwsim node, check launchfile')
         sys.exit(1)
         
