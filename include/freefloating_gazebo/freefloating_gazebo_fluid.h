@@ -30,8 +30,8 @@ namespace gazebo
 	public: link_st()
 		{
 			std::cerr<<"\n Init link_st()"; waterSurface.Set(0,0,0);
-			usingLocalFluidVelocity = false;
-			usingNoneFluidVelocity = true;
+			usingLocalWaterVelocity = false;
+			usingNoneWaterVelocity = true;
 			usingLocalWindVelocity = false;
 			usingNoneWindVelocity = true;
 		};
@@ -46,15 +46,15 @@ namespace gazebo
 	ros::Subscriber water_subscriber;
 	ros::Subscriber waterCurrent_subscriber;
 
-	math::Vector3 fluid_velocity_;
-	bool usingLocalFluidVelocity;
-	bool usingNoneFluidVelocity;
+	math::Vector3 water_velocity_;
+	bool usingLocalWaterVelocity;
+	bool usingNoneWaterVelocity;
 	bool usingLocalWindVelocity;
 	bool usingNoneWindVelocity;
-    ros::Subscriber fluidVelocity_subscriber;
-    ros::ServiceClient fluid_velocity_serviceClient_;
+    ros::Subscriber waterVelocity_subscriber;
+    ros::ServiceClient water_velocity_serviceClient_;
     ros::ServiceClient wind_velocity_serviceClient_;
-	math::Vector3 wind;
+	math::Vector3 wind_velocity_;
 	double frontal_area;
 	double lateral_area;
 	double lateral_length;
@@ -64,7 +64,7 @@ namespace gazebo
         void initServiceClient(ros::NodeHandle* rosnode)
         {
         	std::cerr<<"\n initializing water service client";
-        	fluid_velocity_serviceClient_ = rosnode->serviceClient<usv_water_current::GetSpeed>("/waterCurrent");
+        	water_velocity_serviceClient_ = rosnode->serviceClient<usv_water_current::GetSpeed>("/waterCurrent");
         	std::cerr<<" ... done";
         	running = true;
         }
@@ -95,15 +95,15 @@ namespace gazebo
 					srv.request.x = waterSurface.x;
 					srv.request.y = waterSurface.y;
 					//std::cerr<<"\n calling services 1! water: "<<usingLocalFluidVelocity;
-					if (usingLocalFluidVelocity && fluid_velocity_serviceClient_.call(srv))
+					if (usingLocalWaterVelocity && water_velocity_serviceClient_.call(srv))
 					{
-						fluid_velocity_.x = srv.response.x;
-						fluid_velocity_.y = srv.response.y;
-						//std::cerr << "\n ============== fluidWater "<<model_name<<"="<<link->GetName()<<" ("<<fluid_velocity_.x<<", "<<fluid_velocity_.y<<")";
+						water_velocity_.x = srv.response.x;
+						water_velocity_.y = srv.response.y;
+						//std::cerr << "\n ============== fluidWater "<<model_name<<"="<<link->GetName()<<" ("<<water_velocity_.x<<", "<<water_velocity_.y<<")";
 					}
-					else if (usingLocalFluidVelocity)
+					else if (usingLocalWaterVelocity)
 					{
-							ROS_WARN("Failed to call service waterCurrent %s::%s", model_name.c_str(), link->GetName().c_str());
+							ROS_WARN("FreefloatingPlugin::Failed to call service waterCurrent %s::%s", model_name.c_str(), link->GetName().c_str());
 
 
 							ros::Rate s(1);
@@ -112,13 +112,13 @@ namespace gazebo
 					//std::cerr<<"\n calling services 2! wind: "<<usingLocalWindVelocity;
 					if (usingLocalWindVelocity && wind_velocity_serviceClient_.call(srv))
 					{
-						wind.x = srv.response.x;
-						wind.y = srv.response.y;
+						wind_velocity_.x = srv.response.x;
+						wind_velocity_.y = srv.response.y;
 						//std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<" ("<<wind.x<<", "<<wind.y<<")";
 					}
 					else if (usingLocalWindVelocity)
 					{
-							ROS_WARN("Failed to call service windCurrent %s::%s", model_name.c_str(), link->GetName().c_str());
+							ROS_WARN("FreefloatingPlugin::Failed to call service windCurrent %s::%s", model_name.c_str(), link->GetName().c_str());
 
 							ros::Rate s(1);
 							s.sleep();
@@ -143,9 +143,9 @@ namespace gazebo
 
 	void processWaterCurrentData(const geometry_msgs::Vector3::ConstPtr& pt)
 		{
-			fluid_velocity_.x = pt->x;
-			fluid_velocity_.y = pt->y;
-			fluid_velocity_.z = pt->z;
+			water_velocity_.x = pt->x;
+			water_velocity_.y = pt->y;
+			water_velocity_.z = pt->z;
 		}
 
 	void createSubscriberWaterCurrent(ros::NodeHandle *nh, std::string topic)

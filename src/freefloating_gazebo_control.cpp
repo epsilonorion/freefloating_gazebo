@@ -364,6 +364,7 @@ namespace gazebo
 					        std::find (joint_states_.name.begin (), joint_states_.name.end (), joint_command_.name[i]));
 					joint = joints_[idx];
 					joint->SetForce (0, joint_command_.effort[i]);
+					//std::cerr<<"\n -----> apply force: "<<joint_command_.effort[i];
 				}
 			}
 
@@ -397,6 +398,7 @@ namespace gazebo
 						fixed (i) = thruster_command_ (thruster_fixed_idx_[i]);
 					// to wrench
 					fixed = thruster_map_ * fixed;
+					//std::cerr<<"\n -----> apply force2: "<<fixed(0)<<", "<<fixed(1)<<", "<<fixed(2)<<", ";
 					// apply this wrench to body
 					body_->AddForceAtWorldPosition (
 					        body_->GetWorldPose ().rot.RotateVector (math::Vector3 (fixed (0), fixed (1), fixed (2))),
@@ -410,20 +412,25 @@ namespace gazebo
 					for (unsigned int i = 0; i < thruster_steer_idx_.size (); ++i)
 						if (body_->GetWorldCoGPose ().pos.z < link_water_surface[i]->waterSurface.z)
 						{
+							//std::cerr<<"\n relativeForce["<<i<<"]: "<<thruster_links_[i]->GetRelativeForce();
 							//std::cerr<<"\n ["<<i<<"] UNDER WATER "<<thruster_command_(thruster_steer_idx_[i])<<" . max: "<<thruster_max_command_[i];
 							if (thruster_command_ (thruster_steer_idx_[i]) < -thruster_max_command_[i])
 							{
+								//std::cerr<<" --- 1: "<<thruster_max_command_[i];
 								thruster_links_[i]->AddRelativeForce (math::Vector3 (0, 0, thruster_max_command_[i]));
 							}
 							else if (thruster_command_ (thruster_steer_idx_[i]) > thruster_max_command_[i])
 							{
+								//std::cerr<<" --- 2: "<<-thruster_max_command_[i];
 								thruster_links_[i]->AddRelativeForce (math::Vector3 (0, 0, -thruster_max_command_[i]));
 							}
 							else
 							{
+								//std::cerr<<" --- 3: "<<-thruster_command_ (thruster_steer_idx_[i]);
 								thruster_links_[i]->AddRelativeForce (
 								        math::Vector3 (0, 0, -thruster_command_ (thruster_steer_idx_[i])));
 							}
+							//std::cerr<<"\n relativeForce: "<<thruster_links_[i]->GetRelativeForce();
 						}
 						else
 						{

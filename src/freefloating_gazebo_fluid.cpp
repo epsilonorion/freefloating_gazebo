@@ -160,6 +160,7 @@ namespace gazebo
 		const math::Vector3 WORLD_GRAVITY = world_->GetPhysicsEngine ()->GetGravity ().Normalize ();
 		for (std::vector<link_st*>::iterator link_it = buoyant_links_.begin (); link_it != buoyant_links_.end (); ++link_it)
 		{
+			//std::cerr<<"\n world Force["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->link->GetWorldForce();
 			// get world position of the center of buoyancy
 			cob_position = (*link_it)->link->GetWorldPose ().pos
 			    + (*link_it)->link->GetWorldPose ().rot.RotateVector ((*link_it)->buoyancy_center);
@@ -208,7 +209,7 @@ namespace gazebo
 				if (mult < 0.0)
 					mult = 0.0;
 
-				math::Vector3 Vw  = (*link_it)->wind;
+				math::Vector3 Vw  = (*link_it)->wind_velocity_;
 				double Afw = (*link_it)->frontal_area*mult; // frontal area
 				double Alw = (*link_it)->lateral_area*mult; // lateral area
 				double Hlw = signed_distance_to_surface; // height of centroid lateral area
@@ -275,30 +276,39 @@ namespace gazebo
 
 			// get velocity damping
 			// linear velocity difference in the link frame
-			if ((*link_it)->usingLocalFluidVelocity)
+			if ((*link_it)->usingLocalWaterVelocity)
 			{
+				//std::cerr<<"\n local: ";
 				velocity_difference = (*link_it)->link->GetWorldPose ().rot.RotateVectorReverse (
-				    (*link_it)->link->GetWorldLinearVel () - (*link_it)->fluid_velocity_);
+				    (*link_it)->link->GetWorldLinearVel () - (*link_it)->water_velocity_);
 			}
-			else if ((*link_it)->usingNoneFluidVelocity)
+			else if ((*link_it)->usingNoneWaterVelocity)
 			{
 				velocity_difference = (*link_it)->link->GetWorldPose ().rot.RotateVectorReverse (
 								    (*link_it)->link->GetWorldLinearVel () );
+				//std::cerr<<"\n none worldLinearVel: "<<(*link_it)->link->GetWorldLinearVel ();
 			}
 			else
+			{
+				//std::cerr<<"\n global fluid_velocity_("<<(*link_it)->link->GetName()<<"): "<<fluid_velocity_;
 				velocity_difference = (*link_it)->link->GetWorldPose ().rot.RotateVectorReverse (
 				    (*link_it)->link->GetWorldLinearVel () - fluid_velocity_);
+			}
 
 			// to square
 			velocity_difference.x *= fabs (velocity_difference.x);
 			velocity_difference.y *= fabs (velocity_difference.y);
 			velocity_difference.z *= fabs (velocity_difference.z);
 			// apply damping coefficients
+			//std::cerr<<"\n ###actual_force: "<<actual_force;
 			actual_force -= (*link_it)->link->GetWorldPose ().rot.RotateVector (
 			    (*link_it)->linear_damping * velocity_difference);
 
 			//link_it->link->AddForceAtRelativePosition(link_it->link->GetWorldPose().rot.RotateVectorReverse(link_it->buoyant_force),
 			//                                          link_it->buoyancy_center);
+			//std::cerr<<"\n linear_damping["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->linear_damping<<" vel diff: "<<velocity_difference;
+			//std::cerr<<"\n subtract["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->link->GetWorldPose ().rot.RotateVector (	    (*link_it)->linear_damping * velocity_difference);
+			//std::cerr<<"\n bouyancy["<<(*link_it)->link->GetName()<<"]: "<<actual_force;
 			(*link_it)->link->AddForceAtWorldPosition (actual_force, cob_position);
 
 			// same for angular damping
@@ -345,6 +355,7 @@ namespace gazebo
 
 			//  ROS_INFO("Link %s: Applying buoyancy force (%.01f, %.01f, %.01f)", link.name.c_str(), link.buoyant_force.x, link.buoyant_force.y, link.buoyant_force.z);
 		}
+		//std::cerr<<"\n FreeFloatingFluidPlugin::Update finisheed";
 	}
 
 	void
@@ -463,28 +474,30 @@ namespace gazebo
 									std::stringstream ss (buoy_node->ToElement ()->GetText ());
 									ss >> new_buoy_link->lateral_length;
 								}
-								else if (buoy_node->ValueStr () == "fluidVelocity")
+								else if (buoy_node->ValueStr () == "waterVelocity")
 								{
 									std::string nameLocal = "local";
 									std::string nameGlobal = "global";
 									std::string nameNone = "none";
+									std::cerr<<"\n waterVelocity type("<<urdf_node->ToElement()->Attribute("name")<<"): "<<buoy_node->ToElement ()->GetText ();
 									if (nameLocal.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
-										new_buoy_link->usingLocalFluidVelocity = true;
+										new_buoy_link->usingLocalWaterVelocity = true;
+										new_buoy_link->usingNoneWaterVelocity = false;
 										new_buoy_link->initServiceClient (rosnode_);
 
 										//new_buoy_link->Start ();
 									}
 									else if (nameNone.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
-										new_buoy_link->usingLocalFluidVelocity = false;
-										new_buoy_link->usingNoneFluidVelocity = true;
+										new_buoy_link->usingLocalWaterVelocity = false;
+										new_buoy_link->usingNoneWaterVelocity = true;
 										fluid_velocity_.Set (0, 0, 0);
 									}
 									else if (nameGlobal.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
-										new_buoy_link->usingLocalFluidVelocity = false;
-										new_buoy_link->usingNoneFluidVelocity = false;
+										new_buoy_link->usingLocalWaterVelocity = false;
+										new_buoy_link->usingNoneWaterVelocity = false;
 										new_buoy_link->createSubscriberWaterCurrent(rosnode_, "\gazebo\current");
 									}
 								}
@@ -493,9 +506,12 @@ namespace gazebo
 									std::string nameLocal = "local";
 									std::string nameGlobal = "global";
 									std::string nameNone = "none";
+
+									//std::cerr<<"\n windVelocity type("<<urdf_node->ToElement()->Attribute("name")<<"): "<<buoy_node->ToElement ()->GetText ();
 									if (nameLocal.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
 										new_buoy_link->usingLocalWindVelocity = true;
+										new_buoy_link->usingNoneWindVelocity = false;
 										new_buoy_link->initWindServiceClient (rosnode_);
 
 										//new_buoy_link->Start ();
@@ -504,7 +520,7 @@ namespace gazebo
 									{
 										new_buoy_link->usingLocalWindVelocity = false;
 										new_buoy_link->usingNoneWindVelocity = true;
-										new_buoy_link->wind.Set (0, 0, 0);
+										new_buoy_link->wind_velocity_.Set (0, 0, 0);
 									}
 									else if (nameGlobal.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
@@ -513,8 +529,8 @@ namespace gazebo
 										double x, y;
 										rosnode_->getParam ("/uwsim/wind/x", x);
 										rosnode_->getParam ("/uwsim/wind/y", y);
-										new_buoy_link->wind.Set (x, y, 0);
-										std::cerr<<"\n\n wind: "<<x<<", "<<y;
+										new_buoy_link->wind_velocity_.Set (x, y, 0);
+										//std::cerr<<"\n\n wind: "<<x<<", "<<y;
 									}
 								}
 								else if (buoy_node->ValueStr () == "damping")
@@ -532,7 +548,7 @@ namespace gazebo
 									ROS_WARN("Unknown tag <%s/> in buoyancy node for model %s", buoy_node->ValueStr ().c_str (),
 									         _model->GetName ().c_str ());
 							}
-							if (new_buoy_link->usingLocalFluidVelocity || new_buoy_link->usingLocalWindVelocity)
+							if (new_buoy_link->usingLocalWaterVelocity || new_buoy_link->usingLocalWindVelocity)
 								new_buoy_link->Start ();
 							new_buoy_link->buoyant_force = -compensation * sdf_link->GetInertial ()->GetMass () * WORLD_GRAVITY;
 
@@ -548,7 +564,7 @@ namespace gazebo
 		else
 			ROS_INFO_NAMED("Buoyancy plugin", "Added %i buoy links from %s",
 			               (int ) buoyant_links_.size () - previous_link_number, _model->GetName ().c_str ());
-		std::cerr << "\n ### FINISHED FreeFloatingFluidPlugin::ParseNewModel";
+		//std::cerr << "\n ### FINISHED FreeFloatingFluidPlugin::ParseNewModel";
 	}
 
 	void
