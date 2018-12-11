@@ -64,7 +64,7 @@ namespace gazebo
 		std::cerr << "\n STARTING TO VERIFY EXISTENCE OF CONTROL BODY AND CONTROL JOINTS!" << endl;
 		while (!(control_body_ || control_joints_))
 		{
-
+			sleep(1);
 			control_body_ = control_node.hasParam ("config/body");
 			control_joints_ = control_node.hasParam ("config/joints");
 			std::cerr << "==========FFControlPlugin -  WAIT INTENTIFING CONTROL! body: " << control_body_ << " joints: "
@@ -435,7 +435,7 @@ namespace gazebo
 						else
 						{
 							double v = thruster_command_ (thruster_steer_idx_[i]);
-							//std::cerr<<"\n ["<<i<<"]"<<thruster_overWater_max_command_.size()<<" OVER WATER "<<v<<" > "<<thruster_overWater_max_command_[i];
+							//std::cerr<<"\n ["<<i<<"]"<<thruster_links_[i]->GetName()<<"  :"<<thruster_overWater_max_command_.size()<<" OVER WATER "<<v<<" > "<<thruster_overWater_max_command_[i];
 							if (thruster_command_ (thruster_steer_idx_[i]) < -thruster_overWater_max_command_[i])
 							{
 								thruster_links_[i]->AddRelativeForce (
@@ -450,8 +450,13 @@ namespace gazebo
 							{
 								thruster_links_[i]->AddRelativeForce (
 								        math::Vector3 (0, 0, -thruster_command_ (thruster_steer_idx_[i])));
+								//std::cerr<<"\n applied: "<<thruster_command_ (thruster_steer_idx_[i]);
 							}
 						}
+						//std::cerr<<"\n ---relativeForce["<<i<<"]: "<<thruster_links_[i]->GetRelativeForce();
+						//std::cerr<<"\n ---worldForce["<<i<<"]: "<<thruster_links_[i]->GetWorldForce();
+						//std::cerr<<"\n ---relativeTorque["<<i<<"]: "<<thruster_links_[i]->GetRelativeTorque();
+						//std::cerr<<"\n ---worldTorque["<<i<<"]: "<<thruster_links_[i]->GetWorldTorque();
 				}
 
 				// compute and publish thruster use in %

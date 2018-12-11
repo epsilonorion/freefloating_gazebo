@@ -35,7 +35,7 @@ namespace gazebo
 	void
 	FreeFloatingFluidPlugin::Load (physics::WorldPtr _world, sdf::ElementPtr _sdf)
 	{
-		std::cerr << "\n ===== FreeFloatingFluidPlugin loading";
+		//std::cerr << "\n ===== FreeFloatingFluidPlugin loading";
 		ROS_INFO("############### Loading freefloating_fluid plugin");
 		this->world_ = _world;
 
@@ -82,6 +82,7 @@ namespace gazebo
 		buoyant_links_.clear ();
 		parsed_models_.clear ();
 
+		Update();
 		ROS_INFO("############### Loaded freefloating_fluid plugin.");
 	}
 
@@ -317,6 +318,8 @@ namespace gazebo
 			velocity_difference.y *= fabs (velocity_difference.y);
 			velocity_difference.z *= fabs (velocity_difference.z);
 			(*link_it)->link->AddRelativeTorque (-(*link_it)->angular_damping * velocity_difference);
+			//std::cerr<<"\n angular damping["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->angular_damping<<" velocity_difference: "<<velocity_difference;
+			//std::cerr<<"\n torque: "<<(-(*link_it)->angular_damping * velocity_difference);
 
 			// publish states as odometry message
 			nav_msgs::Odometry state;
@@ -362,10 +365,10 @@ namespace gazebo
 	FreeFloatingFluidPlugin::ParseNewModel (const physics::ModelPtr &_model)
 	{
 
-		std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
-		std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
-		std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
-		std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
+		//std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
+		//std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
+		//std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
+		//std::cerr << "\n ############################################### START FreeFloatingFluidPlugin::ParseNewModel";
 		// define new model structure: name / pointer / publisher to odometry
 		model_st* new_model = new model_st ();
 		new_model->name = _model->GetName ();
@@ -479,7 +482,7 @@ namespace gazebo
 									std::string nameLocal = "local";
 									std::string nameGlobal = "global";
 									std::string nameNone = "none";
-									std::cerr<<"\n waterVelocity type("<<urdf_node->ToElement()->Attribute("name")<<"): "<<buoy_node->ToElement ()->GetText ();
+									//std::cerr<<"\n waterVelocity type("<<urdf_node->ToElement()->Attribute("name")<<"): "<<buoy_node->ToElement ()->GetText ();
 									if (nameLocal.compare (buoy_node->ToElement ()->GetText ()) == 0)
 									{
 										new_buoy_link->usingLocalWaterVelocity = true;
