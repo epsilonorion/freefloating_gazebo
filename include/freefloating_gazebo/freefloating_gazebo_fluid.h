@@ -10,6 +10,7 @@
 #include <geometry_msgs/Point.h>
 #include <tf/transform_broadcaster.h>
 #include "usv_water_current/GetSpeed.h"
+#include "usv_wind_current/GetSpeed.h"
 #include <thread>
 #include <cmath>
 
@@ -73,7 +74,7 @@ namespace gazebo
 		{
 
 			std::cerr<<"\n initializing wind service client";
-			wind_velocity_serviceClient_ = rosnode->serviceClient<usv_water_current::GetSpeed>("/windCurrent");
+			wind_velocity_serviceClient_ = rosnode->serviceClient<usv_wind_current::GetSpeed>("/windCurrent");
 			std::cerr<<" ... done";
 			running = true;
 		}
@@ -110,10 +111,16 @@ namespace gazebo
 							s.sleep();
 					}
 					//std::cerr<<"\n calling services 2! wind: "<<usingLocalWindVelocity;
-					if (usingLocalWindVelocity && wind_velocity_serviceClient_.call(srv))
+					usv_wind_current::GetSpeed srv_wind;
+					srv_wind.request.x = link->GetWorldPose().pos.x;
+					srv_wind.request.y = link->GetWorldPose().pos.y;
+					srv_wind.request.z = link->GetWorldPose().pos.z;
+					if (usingLocalWindVelocity && wind_velocity_serviceClient_.call(srv_wind))
 					{
-						wind_velocity_.x = srv.response.x;
-						wind_velocity_.y = srv.response.y;
+						wind_velocity_.x = srv_wind.response.x;
+						wind_velocity_.y = srv_wind.response.y;
+						wind_velocity_.z = srv_wind.response.z;
+						std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<"pos: ("<<link->GetWorldPose().pos.x<<", "<<link->GetWorldPose().pos.y<<", "<<link->GetWorldPose().pos.z<<") wind: ("<<wind_velocity_.x<<", "<<wind_velocity_.y<<", "<<wind_velocity_.z<<")";
 						//std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<" ("<<wind.x<<", "<<wind.y<<")";
 					}
 					else if (usingLocalWindVelocity)
