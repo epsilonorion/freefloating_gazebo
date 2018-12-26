@@ -31,7 +31,7 @@ public:
 		waterSurface.y = pt->y;
 		waterSurface.z = pt->z;
 
-		//std::cerr<<"\n "<<name<<" m estah com z: "<<waterSurface.z;
+		//std::cerr<<"\n "<<linkName<<" m estah com z: "<<waterSurface.z;
 	}
 
 	void createSubscriber(ros::NodeHandle nh, std::string topic)

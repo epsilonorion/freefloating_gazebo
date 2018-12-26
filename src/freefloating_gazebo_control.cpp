@@ -67,8 +67,7 @@ namespace gazebo
 			sleep(1);
 			control_body_ = control_node.hasParam ("config/body");
 			control_joints_ = control_node.hasParam ("config/joints");
-			std::cerr << "==========FFControlPlugin -  WAIT INTENTIFING CONTROL! body: " << control_body_ << " joints: "
-			        << control_joints_ << endl;
+			std::cerr << "==========FFControlPlugin -  WAIT INTENTIFING CONTROL! body: " << control_body_ << " joints: "<< control_joints_ << endl;
 		}
 
 		// *** SET UP BODY CONTROL
@@ -410,7 +409,7 @@ namespace gazebo
 				if (thruster_steer_idx_.size ())
 				{
 					for (unsigned int i = 0; i < thruster_steer_idx_.size (); ++i)
-						if (body_->GetWorldCoGPose ().pos.z < link_water_surface[i]->waterSurface.z)
+						if (thruster_links_[i]->GetWorldCoGPose ().pos.z < link_water_surface[i]->waterSurface.z)
 						{
 							//std::cerr<<"\n relativeForce["<<i<<"]: "<<thruster_links_[i]->GetRelativeForce();
 							//std::cerr<<"\n ["<<i<<"] UNDER WATER "<<thruster_command_(thruster_steer_idx_[i])<<" . max: "<<thruster_max_command_[i];
@@ -436,6 +435,8 @@ namespace gazebo
 						{
 							double v = thruster_command_ (thruster_steer_idx_[i]);
 							//std::cerr<<"\n ["<<i<<"]"<<thruster_links_[i]->GetName()<<"  :"<<thruster_overWater_max_command_.size()<<" OVER WATER "<<v<<" > "<<thruster_overWater_max_command_[i];
+							//std::cerr<<"\n THRUSTER: "<<thruster_links_[i]->GetName()<<" POS: "<<thruster_links_[i]->GetWorldPose();
+							//std::cerr<<"\n ["<<i<<"]"<<thruster_links_[i]->GetName()<<"  :"<<thruster_links_[i]->GetWorldCoGPose ().pos.z<<" < "<<link_water_surface[i]->waterSurface.z;
 							if (thruster_command_ (thruster_steer_idx_[i]) < -thruster_overWater_max_command_[i])
 							{
 								thruster_links_[i]->AddRelativeForce (

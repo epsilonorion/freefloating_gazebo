@@ -217,11 +217,13 @@ namespace gazebo
 				double Hfw = signed_distance_to_surface; // height of centroid frontal area
 				double Loa = (*link_it)->lateral_length; // length overall
 				//double urw = u - Vw * cos(Bw - W);
-				double urw = (*link_it)->link->GetWorldLinearVel ().x - Vw.x;
+				//double urw = (*link_it)->link->GetWorldLinearVel ().x - Vw.x;
+				double urw = (*link_it)->link->GetWorldPose ().rot.RotateVectorReverse ((*link_it)->link->GetWorldLinearVel () - Vw).x;
 				//double vrw = v - Vw * sin(Bw - W);
-				double vrw = (*link_it)->link->GetWorldLinearVel ().y - Vw.y;
+				double vrw = (*link_it)->link->GetWorldPose ().rot.RotateVectorReverse ((*link_it)->link->GetWorldLinearVel () - Vw).y;
+				//double vrw = (*link_it)->link->GetWorldLinearVel ().y - Vw.y;
 				double Pa = 1.184;
-				double Sl = 0.1;
+				double Sl = 0.05;
 
 				// speed boat values
 				double CDt = 0.90;
@@ -270,9 +272,11 @@ namespace gazebo
 
 
 				//std::cerr<<"\n "<<(*link_it)->model_name<<" mult: "<<mult<<" signed_distance_to_surface: "<<signed_distance_to_surface<< " w: "<< surface_plane_.z<<" z: "<< cob_position.z;
-				//std::cerr<<"\n "<<(*link_it)->model_name<<" "<<Xw<<", "<<Yw<<", "<<Zw<<") Vw ("<<Vw.x<<", "<<Vw.y<<", "<<Vw.z<<") M ("<<Kw<<", "<<Mw<<", "<<Nw<<") CN: "<<Cn<<" CY: "<<Cy<<" Yrw: "<<Yrw<<" speed ("<<urw<<", "<<vrw<<") linSpeed: "<<(*link_it)->link->GetWorldLinearVel ().x<<", "<<(*link_it)->link->GetWorldLinearVel ().y<<")";
+				//std::cerr<<"\n "<<(*link_it)->model_name<<"["<<(*link_it)->link->GetName()<<"] F: ("<<Xw<<", "<<Yw<<", "<<Zw<<") Vw ("<<Vw.x<<", "<<Vw.y<<", "<<Vw.z<<") M ("<<Kw<<", "<<Mw<<", "<<Nw<<") CN: "<<Cn<<" CY: "<<Cy<<" Yrw: "<<Yrw<<" speed ("<<urw<<", "<<vrw<<") linSpeed: "<<(*link_it)->link->GetWorldLinearVel ().x<<", "<<(*link_it)->link->GetWorldLinearVel ().y<<") mult: "<<mult;
+				//std::cerr<<"\n "<<(*link_it)->model_name<<"["<<(*link_it)->link->GetName()<<"] lateral:" <<Alw<<" frontal: "<<Afw;
 				(*link_it)->link->AddRelativeTorque (math::Vector3(Kw, Mw, Nw) );
-				(*link_it)->link->AddForceAtWorldPosition (math::Vector3(Xw, Yw, Zw), cob_position);
+				//(*link_it)->link->AddForceAtWorldPosition (math::Vector3(Xw, Yw, Zw), cob_position);
+				(*link_it)->link->AddRelativeForce (math::Vector3(Xw, Yw, Zw));
 			}
 
 			// get velocity damping
@@ -309,7 +313,10 @@ namespace gazebo
 			//                                          link_it->buoyancy_center);
 			//std::cerr<<"\n linear_damping["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->linear_damping<<" vel diff: "<<velocity_difference;
 			//std::cerr<<"\n subtract["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->link->GetWorldPose ().rot.RotateVector (	    (*link_it)->linear_damping * velocity_difference);
-			//std::cerr<<"\n bouyancy["<<(*link_it)->link->GetName()<<"]: "<<actual_force;
+		//	std::cerr<<"\n bouyancy["<<(*link_it)->link->GetName()<<"]: "<<actual_force;
+			//std::cerr<<"\n position["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->link->GetWorldPose ();
+			//std::cerr<<"\n cob_position["<<(*link_it)->link->GetName()<<"]: "<<cob_position;
+			//std::cerr<<"\n world cob["<<(*link_it)->link->GetName()<<"]: "<<(*link_it)->link->GetWorldCoGPose();
 			(*link_it)->link->AddForceAtWorldPosition (actual_force, cob_position);
 
 			// same for angular damping

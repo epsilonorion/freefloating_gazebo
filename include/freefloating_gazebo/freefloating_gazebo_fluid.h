@@ -120,7 +120,7 @@ namespace gazebo
 						wind_velocity_.x = srv_wind.response.x;
 						wind_velocity_.y = srv_wind.response.y;
 						wind_velocity_.z = srv_wind.response.z;
-						std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<"pos: ("<<link->GetWorldPose().pos.x<<", "<<link->GetWorldPose().pos.y<<", "<<link->GetWorldPose().pos.z<<") wind: ("<<wind_velocity_.x<<", "<<wind_velocity_.y<<", "<<wind_velocity_.z<<")";
+						//std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<"pos: ("<<link->GetWorldPose().pos.x<<", "<<link->GetWorldPose().pos.y<<", "<<link->GetWorldPose().pos.z<<") wind: ("<<wind_velocity_.x<<", "<<wind_velocity_.y<<", "<<wind_velocity_.z<<")";
 						//std::cerr << "\n ============== wind "<<model_name<<"="<<link->GetName()<<" ("<<wind.x<<", "<<wind.y<<")";
 					}
 					else if (usingLocalWindVelocity)
