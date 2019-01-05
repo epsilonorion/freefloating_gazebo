@@ -27,8 +27,8 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>eigen</build_depend>
-  <build_depend>usv_water_current</build_depend>
-  <build_depend>usv_wind_current</build_depend>
+  <build_depend>water_current</build_depend>
+  <build_depend>wind_current</build_depend>
   <build_depend>message_generation</build_depend>
   <run_depend>message_runtime</run_depend>
   <run_depend>urdf</run_depend>
@@ -43,8 +43,8 @@
   <run_depend>sensor_msgs</run_depend>
   <run_depend>nav_msgs</run_depend>
   <run_depend>eigen</run_depend>
-  <run_depend>usv_water_current</run_depend>
-  <run_depend>usv_wind_current</run_depend>
+  <run_depend>water_current</run_depend>
+  <run_depend>wind_current</run_depend>
 
   <export>
     <gazebo_ros plugin_path="${prefix}/lib" gazebo_media_path="${prefix}" />

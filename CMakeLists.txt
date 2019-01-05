@@ -14,7 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   control_toolbox
   rostime
   nav_msgs
-  usv_water_current
+  water_current
+  wind_current
 )
 
 find_package(gazebo REQUIRED)

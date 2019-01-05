@@ -9,8 +9,8 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Point.h>
 #include <tf/transform_broadcaster.h>
-#include "usv_water_current/GetSpeed.h"
-#include "usv_wind_current/GetSpeed.h"
+#include "water_current/GetSpeed.h"
+#include "wind_current/GetSpeed.h"
 #include <thread>
 #include <cmath>
 
@@ -65,7 +65,7 @@ namespace gazebo
         void initServiceClient(ros::NodeHandle* rosnode)
         {
         	std::cerr<<"\n initializing water service client";
-        	water_velocity_serviceClient_ = rosnode->serviceClient<usv_water_current::GetSpeed>("/waterCurrent");
+        	water_velocity_serviceClient_ = rosnode->serviceClient<water_current::GetSpeed>("/waterCurrent");
         	std::cerr<<" ... done";
         	running = true;
         }
@@ -74,7 +74,7 @@ namespace gazebo
 		{
 
 			std::cerr<<"\n initializing wind service client";
-			wind_velocity_serviceClient_ = rosnode->serviceClient<usv_wind_current::GetSpeed>("/windCurrent");
+			wind_velocity_serviceClient_ = rosnode->serviceClient<wind_current::GetSpeed>("/windCurrent");
 			std::cerr<<" ... done";
 			running = true;
 		}
@@ -92,7 +92,7 @@ namespace gazebo
 				while(running)
 				{
 
-					usv_water_current::GetSpeed srv;
+					water_current::GetSpeed srv;
 					srv.request.x = waterSurface.x;
 					srv.request.y = waterSurface.y;
 					//std::cerr<<"\n calling services 1! water: "<<usingLocalFluidVelocity;
@@ -111,7 +111,7 @@ namespace gazebo
 							s.sleep();
 					}
 					//std::cerr<<"\n calling services 2! wind: "<<usingLocalWindVelocity;
-					usv_wind_current::GetSpeed srv_wind;
+					wind_current::GetSpeed srv_wind;
 					srv_wind.request.x = link->GetWorldPose().pos.x;
 					srv_wind.request.y = link->GetWorldPose().pos.y;
 					srv_wind.request.z = link->GetWorldPose().pos.z;
@@ -205,7 +205,7 @@ private:
     // parse received fluid velocity message
     void FluidVelocityCallBack(const geometry_msgs::Vector3ConstPtr& _msg);
 
-    bool getSpeedCallback(usv_water_current::GetSpeed::Request &req, usv_water_current::GetSpeed::Request &res);
+    bool getSpeedCallback(water_current::GetSpeed::Request &req, water_current::GetSpeed::Request &res);
 private:
     // plugin options
     bool has_surface_;
