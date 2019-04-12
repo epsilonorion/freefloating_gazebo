@@ -361,3 +361,5 @@ if __name__ == '__main__':
     for object_node in object_nodes:
         spawner_xml.append(object_node)
     insert_header_and_write(spawner_xml, launch_file, spawner_file)
+    print "----Finished!"
+    

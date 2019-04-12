@@ -22,8 +22,14 @@ int main(int argc, char ** argv)
         sleep(5);
         control_body = control_node.hasParam("config/body");
         control_joints = control_node.hasParam("config/joints/name");
-    std::cerr<<"___ WAIT INTENTIFING CONTROL! body: "<<control_body<<" joints: "<<control_joints<<endl;
+        std::cerr<<"___ WAIT INTENTIFING CONTROL! "<<rosnode.getNamespace().c_str()<<" body: "<<control_body<<" joints: "<<control_joints<<endl;
     }
+    do
+	{
+		sleep(5);
+		control_body = control_node.hasParam("config/body");
+		control_joints = control_node.hasParam("config/joints/name");
+    }while(!(control_body || control_joints));
     std::cerr<<"_______ INTENTIFIED CONTROL!"<<endl;
     // recheck control_body against wrench vs thruster control (this basic PID can only do wrench)
     if(control_node.hasParam("config/body/control_type"))
