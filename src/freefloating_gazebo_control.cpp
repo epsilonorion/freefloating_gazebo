@@ -345,6 +345,7 @@ namespace gazebo
 	void
 	FreeFloatingControlPlugin::Update ()
 	{
+		//double t1 = ros::Time::now ().toSec ();
 		// activate callbacks
 		callback_queue_.callAvailable ();
 
@@ -492,6 +493,8 @@ namespace gazebo
 
 			joint_state_publisher_.publish (joint_states_);
 		}
+		//double t2 = ros::Time::now ().toSec ();
+		//std::cerr<<"\n "<<robot_namespace_<<": "<<(t2-t1)<<" t: "<<t;
 	}
 
 	void

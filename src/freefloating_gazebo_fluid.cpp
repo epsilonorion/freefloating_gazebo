@@ -35,12 +35,16 @@ namespace gazebo
 	void
 	FreeFloatingFluidPlugin::Load (physics::WorldPtr _world, sdf::ElementPtr _sdf)
 	{
+
 		//std::cerr << "\n ===== FreeFloatingFluidPlugin loading";
 		ROS_INFO("############### Loading freefloating_fluid plugin");
 		this->world_ = _world;
 
 		// register ROS node
 		rosnode_ = new ros::NodeHandle ("gazebo");
+		// initialize the prevUpdateTime
+		this->prevUpdateTime = ros::Time::now ();
+
 
 		// parse plugin options
 		description_ = "robot_description";
@@ -68,6 +72,15 @@ namespace gazebo
 			fluid_topic = _sdf->Get < std::string > ("fluidTopic");
 
 
+		if (!_sdf->HasElement("updateRate"))
+		{
+		    // if parameter tag does NOT exist
+		    std::cout << "Missing parameter <updateRate> in FreeFloating_Gazebo Plugin, default to 0" << std::endl;
+		    param_update_rate = 0;
+		}
+		    // if parameter tag exists, get its value
+		else param_update_rate = _sdf->Get<double>("updateRate");
+
 		// initialize subscriber to water current
 		ros::SubscribeOptions ops = ros::SubscribeOptions::create<geometry_msgs::Vector3> (
 		    fluid_topic, 1, boost::bind (&FreeFloatingFluidPlugin::FluidVelocityCallBack, this, _1), ros::VoidPtr (),
@@ -89,6 +102,9 @@ namespace gazebo
 	void
 	FreeFloatingFluidPlugin::Update ()
 	{
+
+
+
 		//std::cerr<<"\n FreeFloatingFluidPlugin::Update ()";
 		// activate callbacks
 		callback_queue_.callAvailable ();
@@ -108,35 +124,6 @@ namespace gazebo
 			if (!found && !(world_->GetModel (i)->IsStatic ())) // model not in listand not static, parse it for potential buoyancy flags
 				ParseNewModel (world_->GetModel (i));
 		}
-
-		/*
-		 for(unsigned int model_index = 0; model_index < parsed_models_.size(); model_index++)
-		 {
-		 physics::ModelPtr _model = parsed_models_[model_index]->model_ptr;
-		 for(unsigned int joint_index = 0; joint_index < _model->GetJoints().size(); ++joint_index)
-		 {
-		 physics::LinkPtr parentLink = _model->GetJoints()[joint_index]->GetParent();
-		 physics::LinkPtr childLink;
-		 unsigned int childCount = _model->GetJoints()[joint_index]->GetChildCount();
-		 childLink = _model->GetJoints()[joint_index]->GetChild();
-
-		 math::Pose parentPose = parentLink->GetWorldPose();
-		 math::Pose linkPose = childLink->GetWorldPose();
-		 tf::Vector3 trans(linkPose.pos.x-parentPose.pos.x, linkPose.pos.y-parentPose.pos.y, linkPose.pos.z-parentPose.pos.z);
-		 //math::Quaternion quat = linkPose.rot+parentPose.rot;
-		 math::Quaternion quat = linkPose.rot;
-		 quat.Normalize();
-		 //ROS_WARN(" %s -> %s : quat %f %f %f %f", parentLink->GetName().c_str(), childLink->GetName().c_str(), quat.x, quat.y, quat.z, quat.w);
-
-		 broadcaster.sendTransform(
-		 tf::StampedTransform(
-		 tf::Transform(tf::Quaternion(quat.x, quat.y, quat.z, quat.w), trans),
-		 //tf::Transform(tf::Quaternion(0, 0, 0, 1), trans),
-		 ros::Time::now(), parentLink->GetName(), _model->GetName()+"/"+childLink->GetName()));
-
-		 }
-		 }
-		 */
 
 		// look for deleted world models
 		model_it = parsed_models_.begin ();
@@ -329,43 +316,53 @@ namespace gazebo
 			//std::cerr<<"\n torque: "<<(-(*link_it)->angular_damping * velocity_difference);
 
 			// publish states as odometry message
-			nav_msgs::Odometry state;
-			state.header.frame_id = "world";
-			state.header.stamp = ros::Time::now ();
-			math::Vector3 vec;
-			math::Pose pose;
-			for (model_it = parsed_models_.begin (); model_it != parsed_models_.end (); ++model_it)
+			double delta = (ros::Time::now () - this->prevUpdateTime).toSec();
+			//std::cerr<<"\n delta: "<<delta << " >= " <<param_update_rate;
+			if (delta >= this->param_update_rate)
 			{
-				// which link
-				state.child_frame_id = "base_link";
-				// write absolute pose
-				pose = (*model_it)->model_ptr->GetWorldPose ();
-				state.pose.pose.position.x = pose.pos.x;
-				state.pose.pose.position.y = pose.pos.y;
-				state.pose.pose.position.z = pose.pos.z;
-				state.pose.pose.orientation.x = pose.rot.x;
-				state.pose.pose.orientation.y = pose.rot.y;
-				state.pose.pose.orientation.z = pose.rot.z;
-				state.pose.pose.orientation.w = pose.rot.w;
+				this->prevUpdateTime = ros::Time::now ();
+				nav_msgs::Odometry state;
+				state.header.frame_id = "world";
+				state.header.stamp = ros::Time::now ();
+				math::Vector3 vec;
+				math::Pose pose;
+				for (model_it = parsed_models_.begin (); model_it != parsed_models_.end (); ++model_it)
+				{
+					// which link
+					state.child_frame_id = "base_link";
+					// write absolute pose
+					pose = (*model_it)->model_ptr->GetWorldPose ();
+					state.pose.pose.position.x = pose.pos.x;
+					state.pose.pose.position.y = pose.pos.y;
+					state.pose.pose.position.z = pose.pos.z;
+					state.pose.pose.orientation.x = pose.rot.x;
+					state.pose.pose.orientation.y = pose.rot.y;
+					state.pose.pose.orientation.z = pose.rot.z;
+					state.pose.pose.orientation.w = pose.rot.w;
 
-				// write relative linear velocity
-				vec = (*model_it)->model_ptr->GetRelativeLinearVel ();
-				state.twist.twist.linear.x = vec.x;
-				state.twist.twist.linear.y = vec.y;
-				state.twist.twist.linear.z = vec.z;
-				// write relative angular velocity
-				vec = (*model_it)->model_ptr->GetRelativeAngularVel ();
-				state.twist.twist.angular.x = vec.x;
-				state.twist.twist.angular.y = vec.y;
-				state.twist.twist.angular.z = vec.z;
+					// write relative linear velocity
+					vec = (*model_it)->model_ptr->GetRelativeLinearVel ();
+					state.twist.twist.linear.x = vec.x;
+					state.twist.twist.linear.y = vec.y;
+					state.twist.twist.linear.z = vec.z;
+					// write relative angular velocity
+					vec = (*model_it)->model_ptr->GetRelativeAngularVel ();
+					state.twist.twist.angular.x = vec.x;
+					state.twist.twist.angular.y = vec.y;
+					state.twist.twist.angular.z = vec.z;
 
-				// publish
-				(*model_it)->state_publisher.publish (state);
+					// publish
+					(*model_it)->state_publisher.publish (state);
+				}
 			}
+
 
 			//  ROS_INFO("Link %s: Applying buoyancy force (%.01f, %.01f, %.01f)", link.name.c_str(), link.buoyant_force.x, link.buoyant_force.y, link.buoyant_force.z);
 		}
 		//std::cerr<<"\n FreeFloatingFluidPlugin::Update finisheed";
+/*		double t2 = ros::Time::now ().toNSec ();
+		std::cerr << std::fixed;
+		std::cerr<<"\n delta: "<<(t2-t1)<<" t: "<<t2;*/
 	}
 
 	void

@@ -227,7 +227,8 @@ private:
     ros::Subscriber fluid_velocity_subscriber_;
     math::Vector3 fluid_velocity_;
     tf::TransformBroadcaster broadcaster;
-
+    double param_update_rate;
+    ros::Time prevUpdateTime;
 
 };
 GZ_REGISTER_WORLD_PLUGIN(FreeFloatingFluidPlugin)
